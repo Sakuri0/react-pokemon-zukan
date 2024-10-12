@@ -1,5 +1,5 @@
 // src/api/pokemonDetail.ts
-import { FlavorTextEntry, PokemonType } from './pokemon.type';
+import { FlavorTextEntry, PokemonAbility, PokemonStat, PokemonType } from './pokemon.type';
 import { Name } from './common.type';
 
 type PokemonDetail = {
@@ -8,7 +8,9 @@ type PokemonDetail = {
   japaneseName: string;
   image: string;
   types: string[];
+  abilities: string[];
   description: string;
+  baseStats: { name: string; value: number }[];
 };
 
 export const fetchPokemonDetail = async (id: number): Promise<PokemonDetail> => {
@@ -39,6 +41,29 @@ export const fetchPokemonDetail = async (id: number): Promise<PokemonDetail> => 
     })
   );
 
+  // 特性の日本語名を取得
+  const abilities = await Promise.all(
+    data.abilities.map(async (abilityInfo: PokemonAbility) => {
+      const abilityResponse = await fetch(abilityInfo.ability.url);
+      const abilityData = await abilityResponse.json();
+      const japaneseAbility = abilityData.names.find((name: Name) => name.language.name === 'ja');
+      return japaneseAbility ? japaneseAbility.name : abilityInfo.ability.name;
+    })
+  );
+
+  // 種族値の取得
+  const baseStats = await Promise.all(data.stats.map( async (stat: PokemonStat) => {
+    // 日本語名を取得
+    const japaneseStatData = await fetch(`https://pokeapi.co/api/v2/stat/${stat.stat.name}`);
+    const japaneseStatDataJson = await japaneseStatData.json();
+    return {
+      name: japaneseStatDataJson.names.find((name: Name) => name.language.name === "ja-Hrkt").name,
+      value: stat.base_stat,
+    };
+  }));
+
+  console.log(baseStats);
+
   // 説明文の取得
   const flavorTextEntry = speciesData.flavor_text_entries.find(
     (entry: FlavorTextEntry) => entry.language.name === 'ja'
@@ -51,8 +76,11 @@ export const fetchPokemonDetail = async (id: number): Promise<PokemonDetail> => 
     id: data.id,
     name: data.name,
     japaneseName,
-    image: data.sprites.front_default,
+    image: data.sprites.other['official-artwork'].front_default,
     types,
+    abilities,
     description,
+    baseStats,
   };
 };
+
